@@ -7,6 +7,7 @@ from typing import Any, Optional, Tuple
 
 import fairscale.nn.model_parallel.initialize as fs_init
 import torch
+import torch_npu
 import torch.nn.functional as F
 from fairscale.nn.model_parallel.layers import (
     ColumnParallelLinear,
@@ -17,6 +18,8 @@ from torch import nn
 
 if torch.cuda.is_available():
     device = "cuda"
+elif torch_npu.npu.is_available():
+    device = "npu"
 elif torch.backends.mps.is_available():
     device = "mps"
 else:
@@ -74,7 +77,7 @@ def apply_rotary_emb(
     xk: torch.Tensor,
     freqs_cis: torch.Tensor,
 ) -> Tuple[torch.Tensor, torch.Tensor]:
-    if not torch.cuda.is_available():
+    if not torch.cuda.is_available() and not torch_npu.npu.is_available():
         xq = xq.to('cpu')
         xk = xk.to('cpu')
     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
@@ -284,7 +287,7 @@ class Transformer(nn.Module):
     def forward(self, tokens: torch.Tensor, start_pos: int):
         _bsz, seqlen = tokens.shape
         h = self.tok_embeddings(tokens)
-        self.freqs_cis = self.freqs_cis.to("cuda" if device == "cuda" else "cpu")
+        self.freqs_cis = self.freqs_cis.to(device if device == "cuda" or device == "npu" else "cpu")
         freqs_cis = self.freqs_cis[start_pos : start_pos + seqlen]
 
         mask = None

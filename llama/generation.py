@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import List, Literal, Optional, Tuple, TypedDict
 
 import torch
+import torch_npu
 import torch.nn.functional as F
 from fairscale.nn.model_parallel.initialize import (
     get_model_parallel_rank,
@@ -21,6 +22,8 @@ from llama.tokenizer import Tokenizer
 
 if torch.cuda.is_available():
     device = "cuda"
+elif torch_npu.npu.is_available():
+    device = "npu"
 elif torch.backends.mps.is_available():
     device = "mps"
 else:
@@ -75,6 +78,8 @@ class Llama:
         if not torch.distributed.is_initialized():
             if device == "cuda":
                 torch.distributed.init_process_group("nccl")
+            elif device == "npu":
+                torch.distributed.init_process_group("hccl")
             else:
                 torch.distributed.init_process_group("gloo")
         if not model_parallel_is_initialized():
@@ -85,6 +90,8 @@ class Llama:
         local_rank = int(os.environ.get("LOCAL_RANK", 0))
         if device == "cuda":
             torch.cuda.set_device(local_rank)
+        elif device == "npu":
+            torch_npu.npu.set_device(local_rank)
 
         # seed must be the same in all processes
         torch.manual_seed(1)
