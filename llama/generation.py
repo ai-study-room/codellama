@@ -84,6 +84,7 @@ class Llama:
             else:
                 torch.distributed.init_process_group("gloo")
         if not model_parallel_is_initialized():
+            print(f"========start to initialize mp========")
             if model_parallel_size is None:
                 model_parallel_size = int(os.environ.get("WORLD_SIZE", 1))
             initialize_model_parallel(model_parallel_size)
@@ -123,11 +124,11 @@ class Llama:
         # support for mac
         if device == "cuda":
             if torch.cuda.is_bf16_supported():
-                torch.set_default_tensor_type(torch.cuda.BFloat16Tensor)
+                torch.set_default_dtype(torch.bfloat16)
             else:
-                torch.set_default_tensor_type(torch.cuda.HalfTensor)
+                torch.set_default_dtype(torch.half)
         else:
-            torch.set_default_tensor_type(torch.HalfTensor)
+            torch.set_default_dtype(torch.half)
         model = Transformer(model_args)
         model.load_state_dict(checkpoint, strict=False)
         model.to(device)
