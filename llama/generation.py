@@ -74,6 +74,7 @@ class Llama:
         max_seq_len: int,
         max_batch_size: int,
         model_parallel_size: Optional[int] = None,
+        local_rank: Optional[int] = None,
     ) -> "Llama":
         if not torch.distributed.is_initialized():
             if device == "cuda":
@@ -87,7 +88,9 @@ class Llama:
                 model_parallel_size = int(os.environ.get("WORLD_SIZE", 1))
             initialize_model_parallel(model_parallel_size)
 
-        local_rank = int(os.environ.get("LOCAL_RANK", 0))
+        if local_rank is None:
+            local_rank = int(os.environ.get("LOCAL_RANK", 0))
+        
         if device == "cuda":
             torch.cuda.set_device(local_rank)
         elif device == "npu":
