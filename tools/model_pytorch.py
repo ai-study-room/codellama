@@ -1,3 +1,11 @@
+# coding=utf-8
+#
+# Copyright 2024 by  freesky-edward(freesky.edward@gmail.com).
+# All Rights Reserved © 2024
+# 
+# Org: ai-study-room
+# Author: freesky-edward
+
 import os
 import torch
 from dataclasses import dataclass
@@ -14,7 +22,7 @@ def split_model(model_dict, targets: Tuple[OpTarget], tp_size: int) -> Tuple[dic
     Arguments:
         model_dic: input model dict with key:tensor format.
         targets: tuple of split key and dim.
-                it contains all the split tensor and which dim.
+                it contains all the split weight key and its dim.
                 
                 the struct is:
                 [
@@ -41,7 +49,7 @@ def split_model(model_dict, targets: Tuple[OpTarget], tp_size: int) -> Tuple[dic
     '''
 
     assert isinstance(model_dict, dict), f"the input {type(model_dict)} is not the dict type."
-    assert all(t.key in model_dict for t in targets), f"target key cannot find in weight"    
+    assert all(t.key in model_dict for t in targets), f"target key cannot be found in weight"    
     
     tensors = {t.key: split_tensor(model_dict[t.key], t.dim, tp_size) for t in targets}
     results = [{key : tensors[key][i] if key in tensors else model_dict[key].clone() for key in model_dict.keys()} for i in range(tp_size)]
@@ -65,7 +73,7 @@ def split_tensor(weight: torch.Tensor, dim: int, tp_size: int) -> Tuple[torch.Te
         tp_size: output number of weights.
     '''
 
-    assert -weight.dim() <= dim and dim < weight.dim(), f"invalid input dim({dim}), out of the weight's dims({weight.dim()})"
+    assert -weight.dim() <= dim and dim < weight.dim(), f"invalid input dim({dim}), out of the dims range({weight.dim()})"
     assert weight.shape[dim] % tp_size == 0, f"input weights's size({weight.shape[dim]}) on dim({dim}) can't be divisible by tp_size({tp_size})."
 
     tensor_list = torch.split(weight, weight.shape[dim] // tp_size, dim=dim)
