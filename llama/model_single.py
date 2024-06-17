@@ -282,12 +282,12 @@ class SimpleLinear(nn.Module):
         super().__init__()
         self.in_features = in_features
         self.out_features = out_features
-        self.weight = Parameter(torch.empty((out_features, in_features), **factory_kwargs))
+        self.weight = nn.Parameter(torch.empty((out_features, in_features), **factory_kwargs))
         if bias:
-            self.bias = Parameter(torch.empty(out_features, **factory_kwargs))
+            self.bias = nn.Parameter(torch.empty(out_features, **factory_kwargs))
         else:
             self.register_parameter('bias', None)
 
-    def forward(self, input: Tensor) -> Tensor:
+    def forward(self, input: torch.Tensor) -> torch.Tensor:
         return F.linear(input, self.weight, self.bias)
 
