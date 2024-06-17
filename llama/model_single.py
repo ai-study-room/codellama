@@ -103,10 +103,10 @@ class Attention(nn.Module):
         self.n_rep = args.n_heads // self.n_kv_heads
         self.head_dim = args.dim // args.n_heads
 
-        self.wq = nn.Linear(args.dim, args.dim, bias=False)
-        self.wk = nn.Linear(args.dim, self.head_dim * self.n_kv_heads, bias=False)
-        self.wv = nn.Linear(args.dim, self.head_dim * self.n_kv_heads, bias=False)
-        self.wo = nn.Linear(args.dim, args.dim, bias=False)
+        self.wq = SimpleLinear(args.dim, args.dim, bias=False)
+        self.wk = SimpleLinear(args.dim, self.head_dim * self.n_kv_heads, bias=False)
+        self.wv = SimpleLinear(args.dim, self.head_dim * self.n_kv_heads, bias=False)
+        self.wo = SimpleLinear(args.dim, args.dim, bias=False)
 
         self.cache_k = torch.zeros(
             (
@@ -164,9 +164,7 @@ class Attention(nn.Module):
         scores = F.softmax(scores.float(), dim=-1).type_as(xq)
         output = torch.matmul(scores, values)  # (bs, n_heads, seqlen, head_dim)
         output = output.transpose(1, 2).contiguous().view(bsz, seqlen, -1)
-        #print(f">>>> wqkv : {output.shape} ")
         r_ = self.wo(output)
-        #print(f">>>> wo : {r_.shape} ")
         return r_
 
 
@@ -185,18 +183,15 @@ class FeedForward(nn.Module):
             hidden_dim = int(ffn_dim_multiplier * hidden_dim)
         hidden_dim = multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of)
 
-        self.w1 = nn.Linear(dim, hidden_dim, bias=False)
-        self.w2 = nn.Linear(hidden_dim, dim, bias=False)
-        self.w3 = nn.Linear(dim, hidden_dim, bias=False)
+        self.w1 = SimpleLinear(dim, hidden_dim, bias=False)
+        self.w2 = SimpleLinear(hidden_dim, dim, bias=False)
+        self.w3 = SimpleLinear(dim, hidden_dim, bias=False)
 
 
     def forward(self, x):
         tmp_ = F.silu(self.w1(x)) * self.w3(x)
-        #print(f">>>> w13 : {tmp_.shape} ")
         re_ = self.w2(tmp_)
-        #print(f">>>> w2 : {re_.shape} ")
         return re_
-        #return self.w2(F.silu(self.w1(x)) * self.w3(x))
 
 
 class TransformerBlock(nn.Module):
@@ -224,12 +219,10 @@ class TransformerBlock(nn.Module):
         mask: Optional[torch.Tensor],
     ):
         in_ = self.attention_norm(x)
-        #print(f">>>> attention_norm: {in_.shape}")
         h = x + self.attention.forward(
             in_, start_pos, freqs_cis, mask
         )
         ffn_in = self.ffn_norm(h)
-        #print(f">>>> ffn_norm : {ffn_in.shape} ")
         out = h + self.feed_forward.forward(ffn_in)
         return out
 
@@ -260,7 +253,6 @@ class Transformer(nn.Module):
     def forward(self, tokens: torch.Tensor, start_pos: int):
         _bsz, seqlen = tokens.shape
         h = self.tok_embeddings(tokens)
-        #print(f">>>> tok_embedding: {h.shape} ")
         
         self.freqs_cis = self.freqs_cis.to(device if device == "cuda" or device == "npu" else "cpu")
         freqs_cis = self.freqs_cis[start_pos : start_pos + seqlen]
@@ -275,7 +267,27 @@ class Transformer(nn.Module):
         for layer in self.layers:
             h = layer(h, start_pos, freqs_cis, (mask.to(device) if mask is not None else mask))
         h = self.norm(h)
-        #print(f">>>> last_norm: {h.shape} ")
         output = self.output(h).float()
-        #print(f">>>> last_output: {output.shape} ")
         return output
+
+
+class SimpleLinear(nn.Module):
+    '''A linear transformation with math: Y = XA^T + B
+       compare to nn.Linear without parameter initializing.
+    '''
+
+    def __init__(self, in_features: int, out_features: int, bias: bool = True,
+                 device=None, dtype=None) -> None:
+        factory_kwargs = {'device': device, 'dtype': dtype}
+        super().__init__()
+        self.in_features = in_features
+        self.out_features = out_features
+        self.weight = Parameter(torch.empty((out_features, in_features), **factory_kwargs))
+        if bias:
+            self.bias = Parameter(torch.empty(out_features, **factory_kwargs))
+        else:
+            self.register_parameter('bias', None)
+
+    def forward(self, input: Tensor) -> Tensor:
+        return F.linear(input, self.weight, self.bias)
+
