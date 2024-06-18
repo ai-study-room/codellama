@@ -233,15 +233,15 @@ class Transformer(nn.Module):
         self.params = params
         self.vocab_size = params.vocab_size
         self.n_layers = params.n_layers
-
-        self.tok_embeddings = nn.Embedding(params.vocab_size, params.dim, norm_type=2.0)
+        weight = torch.empty(params.vocab_size, params.dim)
+        self.tok_embeddings = nn.Embedding(params.vocab_size, params.dim, _weight=weight, norm_type=2.0)
 
         self.layers = torch.nn.ModuleList()
         for layer_id in range(params.n_layers):
             self.layers.append(TransformerBlock(layer_id, params))
 
         self.norm = RMSNorm(params.dim, eps=params.norm_eps)
-        self.output = nn.Linear(params.dim, params.vocab_size,bias=False)
+        self.output = SimpleLinear(params.dim, params.vocab_size,bias=False)
 
         self.freqs_cis = precompute_freqs_cis(
             self.params.dim // self.params.n_heads,
